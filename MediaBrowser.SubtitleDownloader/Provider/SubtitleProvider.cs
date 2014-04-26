@@ -57,7 +57,7 @@ namespace MediaBrowser.SubtitleDownloader.Provider {
                 return ItemUpdateType.None;
             }
             OpenSubtitles.SetUserAgent("OS Test User Agent");
-            var loginResponse = OpenSubtitles.LogIn("ruisu15", "migueru15", "en");
+            var loginResponse = OpenSubtitles.LogIn("", "", "en");
             if (!(loginResponse is MethodResponseLogIn))
             {
                 _logger.Debug("Login error");
