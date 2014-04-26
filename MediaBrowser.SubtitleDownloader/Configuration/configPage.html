@@ -1,0 +1,209 @@
+﻿<!DOCTYPE html>
+<html>
+    <head>
+        <title>Subtitle Provider Configuration</title>
+    </head>
+    <body>
+        <!-- ReSharper disable UnknownCssClass -->        
+        <div id="subtitleConfigurationPage" data-role="page" class="page type-interior pluginConfigurationPage">
+            <div data-role="content">
+                <div class="content-primary">
+
+                    <form id="subtitleConfigurationForm">
+                        <ul class="ulForm" data-role="listview">
+                            <li>
+                                <label for="selectUser">Configure Subtitle Provider for:</label>
+                                <select id="selectUser" name="selectUser" onchange="SubtitleProviderConfigurationPage.loadConfiguration(this.value); "></select>
+                            </li>
+                            <li>
+                                <label>Locations Monitored:</label>
+                                <div id="divSubtitleLocations">
+                                </div>
+                            </li>
+                            <li>
+                                <label>Subtitle Language:</label>
+                                <input type="text" id="subtitleLanguage" name="subtitleLanguage" />                               
+                            </li>
+                            <li>
+                                <button type="submit" data-theme="b">Save</button>
+                                <button type="button" onclick=" history.back(); ">Cancel</button>
+                            </li>
+                        </ul>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ReSharper disable UseOfImplicitGlobalInFunctionScope -->
+            <script type="text/javascript">
+
+                var SubtitleProviderConfigurationPage =
+                {
+                    pluginUniqueId: "332f92ad-b541-463a-a61d-4b1df830dfca",
+
+                    loadConfiguration: function (userId) {
+
+                        Dashboard.showLoadingMsg();
+
+                        ApiClient.getPluginConfiguration(SubtitleProviderConfigurationPage.pluginUniqueId).done(function (config) {
+
+                            var currentUserConfig = config.Users.filter(function (curr) {
+
+                                return curr.LinkedMbUserId == userId;
+                                //return true;
+                            })[0];
+
+                            var page = $.mobile.activePage;
+
+                            // User doesn't have a config, so create a default one.
+                            if (!currentUserConfig) {
+
+                                // You don't have to put every property in here, just the ones the UI is expecting (below)
+                                currentUserConfig = {};
+                            }
+
+                            // Default this to an empty array so the rendering code doesn't have to worry about it
+                            currentUserConfig.SubtitleLocations = currentUserConfig.SubtitleLocations || [];
+                            $("#subtitleLanguage", page).val(currentUserConfig.SubtitleLanguage);
+                            // List the folders the user can access
+                            ApiClient.getVirtualFolders().done(function (result) {
+
+                                SubtitleProviderConfigurationPage.loadFolders(currentUserConfig, result);
+                            });
+
+                            Dashboard.hideLoadingMsg();
+                        });
+
+                    },
+
+                    populateUsers: function (users) {
+
+                        var html = "";
+
+                        for (var i = 0, length = users.length; i < length; i++) {
+
+                            var user = users[i];
+
+                            html += '<option value="' + user.Id + '">' + user.Name + '</option>';
+                        }
+
+                        $('#selectUser', $.mobile.activePage).html(html).selectmenu("refresh");
+                    },
+
+                    loadFolders: function (currentUserConfig, virtualFolders) {
+
+                        var page = $.mobile.activePage;
+
+                        var html = "";
+
+                        html += '<div data-role="controlgroup">';
+
+                        for (var i = 0, length = virtualFolders.length; i < length; i++) {
+
+                            var virtualFolder = virtualFolders[i];
+
+                            html += SubtitleProviderConfigurationPage.getFolderHtml(currentUserConfig, virtualFolder, i);
+                        }
+
+                        html += '</div>';
+
+                        $('#divSubtitleLocations', page).html(html).trigger('create');
+
+                    },
+
+                    getFolderHtml: function (currentUserConfig, virtualFolder, index) {
+
+                        var html = "";
+
+                        for (var i = 0, length = virtualFolder.Locations.length; i < length; i++) {
+
+                            var id = "chkFolder" + index + "_" + i;
+
+                            var location = virtualFolder.Locations[i];
+
+                            var isChecked = currentUserConfig.SubtitleLocations.filter(function (current) {
+
+                                return current.toLowerCase() == location.toLowerCase();
+
+                            }).length;
+
+                            var checkedAttribute = isChecked ? 'checked="checked"' : "";
+
+                            html += '<label for="' + id + '">' + location + '</label>';
+                            html += '<input class="chkSubtitleLocation" type="checkbox" data-mini="true" id="' + id + '" name="' + id + '" data-location="' + location + '" ' + checkedAttribute + ' />';
+                        }
+
+                        return html;
+
+                    }
+                };
+
+                $('#subtitleConfigurationPage').on('pageshow', function () {
+
+                    Dashboard.showLoadingMsg();
+
+                    var page = $.mobile.activePage;
+
+                    ApiClient.getUsers().done(function (users) {
+
+                        SubtitleProviderConfigurationPage.populateUsers(users);
+
+                        var currentUserId = $('#selectUser', page).val();
+
+                        SubtitleProviderConfigurationPage.loadConfiguration(currentUserId);
+                    });
+                });
+
+                $('#subtitleConfigurationForm').on('submit', function () {
+
+                    Dashboard.showLoadingMsg();
+
+                    var page = $.mobile.activePage;
+                    var currentUserId = $('#selectUser', page).val();
+                    var subtitleLanguage = $('#subtitleLanguage', page).val();
+
+                    ApiClient.getPluginConfiguration(SubtitleProviderConfigurationPage.pluginUniqueId).done(function (config) {
+
+                        var currentUserConfig = config.Users.filter(function (curr) {
+
+                            return curr.LinkedMbUserId == currentUserId;
+                        })[0];
+
+                        // User doesn't have a config, so create a default one.
+                        if (!currentUserConfig) {
+                            currentUserConfig = {};
+                            config.Users.push(currentUserConfig);
+                        }
+
+                        currentUserConfig.LinkedMbUserId = currentUserId;
+                        currentUserConfig.SubtitleLanguage = subtitleLanguage;
+
+                        currentUserConfig.SubtitleLocations = $('.chkSubtitleLocation:checked', page).map(function () {
+
+                            return this.getAttribute('data-location');
+
+                        }).get();
+
+                        ApiClient.updatePluginConfiguration(SubtitleProviderConfigurationPage.pluginUniqueId, config).done(function (result) {
+
+                            Dashboard.processPluginConfigurationUpdateResult(result);
+
+                            ApiClient.getUsers().done(function (users) {
+
+                                SubtitleProviderConfigurationPage.populateUsers(users);
+
+                                currentUserId = $('#selectUser', page).val();
+
+                                SubtitleProviderConfigurationPage.loadConfiguration(currentUserId);
+                            });
+                        });
+                    });
+
+                    return false;
+                });
+            </script>
+            <!-- ReSharper restore UseOfImplicitGlobalInFunctionScope -->
+
+        </div>
+        <!-- ReSharper restore UnknownCssClass -->
+    </body>
+</html>
